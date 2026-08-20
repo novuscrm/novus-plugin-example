@@ -2,6 +2,9 @@
 
 Plugin de exemplo para o [Novus CRM](https://novuscrm.com.br).
 
+Documentação completa do protocolo, com todas as superfícies disponíveis e
+mais casos de uso: [help.novuscrm.com.br/pages/api/plugins.mdx](https://help.novuscrm.com.br/pages/api/plugins.mdx).
+
 ## Sobre este repositório
 
 Este repositório é um exemplo de referência mantido pelo Novus CRM. Ele mostra
