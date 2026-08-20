@@ -1,0 +1,9 @@
+{
+  "_comentario": "Isto não é um arquivo que o Novus CRM lê — é um exemplo do que preencher na tela Configurações > Plugins ao cadastrar este plugin.",
+  "titulo": "Consulta de Pedido no ERP Externo",
+  "conteudo": {
+    "url": "https://SEU-DOMINIO/index.html",
+    "modo": "modal",
+    "width": 380
+  }
+}

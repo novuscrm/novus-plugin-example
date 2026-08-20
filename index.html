@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Consulta de Pedido</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --cor-texto: #1a1a1a;
+        --cor-texto-fraco: #6b6b6b;
+        --cor-borda: #e2e2e2;
+        --cor-fundo: #ffffff;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --cor-texto: #f2f2f2;
+          --cor-texto-fraco: #a0a0a0;
+          --cor-borda: #333333;
+          --cor-fundo: #1c1c1c;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: var(--cor-texto);
+        background: var(--cor-fundo);
+      }
+
+      h1 {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0 0 12px;
+      }
+
+      #estado {
+        font-size: 13px;
+        color: var(--cor-texto-fraco);
+      }
+
+      #resultado dl {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 6px 12px;
+        margin: 0;
+        font-size: 13px;
+      }
+
+      #resultado dt {
+        color: var(--cor-texto-fraco);
+      }
+
+      #resultado dd {
+        margin: 0;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Pedido do contato</h1>
+    <p id="estado"></p>
+    <div id="resultado" hidden>
+      <dl>
+        <dt>Pedido</dt>
+        <dd data-campo="numero"></dd>
+        <dt>Status</dt>
+        <dd data-campo="status"></dd>
+        <dt>Valor</dt>
+        <dd data-campo="valor"></dd>
+      </dl>
+    </div>
+    <script src="plugin.js"></script>
+  </body>
+</html>
