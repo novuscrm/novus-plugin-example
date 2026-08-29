@@ -1,9 +1,12 @@
 {
-  "_comentario": "Isto não é um arquivo que o Novus CRM lê — é um exemplo do que preencher na tela Configurações > Plugins ao cadastrar este plugin.",
-  "titulo": "Consulta de Pedido no ERP Externo",
-  "conteudo": {
+  "_comentario": "Isto não é um arquivo que o Novus CRM lê — é um exemplo do que preencher na tela Opções > Plugins ao cadastrar este plugin.",
+  "Titulo": "Vendas do contato no C-Plus 5",
+  "Conteudo": {
     "url": "https://SEU-DOMINIO/index.html",
     "modo": "modal",
-    "width": 380
-  }
+    "width": 420
+  },
+  "TipoDeExibicao": 0,
+  "_comentario_TipoDeExibicao": "0 = Conversa (o plugin é contextual ao atendimento), 1 = BarraLateral.",
+  "_comentario_widgetbar": "O botão na barra lateral direita não vem daqui: ele é declarado pelo próprio plugin, no `widgetbar` do `initialize` (ver plugin.js)."
 }

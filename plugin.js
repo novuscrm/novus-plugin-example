@@ -1,5 +1,5 @@
 /**
- * Consulta de Pedido no ERP Externo — plugin de exemplo para o Novus CRM.
+ * Vendas do contato no C-Plus 5 — plugin de exemplo para o Novus CRM.
  *
  * Implementa o protocolo de plugins diretamente (postMessage + MessageChannel),
  * sem depender de nenhuma biblioteca do Novus CRM. O objetivo é deixar visível
@@ -71,75 +71,411 @@
   // Lógica do plugin (a parte que muda pra cada plugin real)
   // ---------------------------------------------------------------------
 
-  const elEstado = document.getElementById("estado");
-  const elResultado = document.getElementById("resultado");
+  /**
+   * Hosts do proxy. O plugin escolhe o destino pelo NOME — nunca pela URL —
+   * e o servidor do Novus CRM resolve endereço, chave e ambiente.
+   *
+   * - "publica": API pública do próprio Novus CRM. O proxy já injeta a chave
+   *   (variável `chaveApiPublica`) e o ambiente da sessão, então esta chamada
+   *   não precisa de `secretRefs`.
+   * - "cplus5": API pública do ERP C-Plus 5. Precisa ser liberada pelo suporte
+   *   do Novus CRM e usa as duas variáveis abaixo. Ver README.
+   */
+  const HOST_NOVUS = "publica";
+  const HOST_ERP = "cplus5";
 
-  function mostrarEstado(texto) {
-    elEstado.textContent = texto;
-    elEstado.hidden = !texto;
-    elResultado.hidden = true;
+  /**
+   * Referências de segredo do C-Plus 5. O plugin manda só o NOME da variável
+   * e onde ela entra; o valor é resolvido no servidor e injetado no cabeçalho
+   * antes da chamada. Nunca chega ao navegador do atendente.
+   */
+  const SEGREDOS_DO_ERP = {
+    "X-Authorization": { secret: "cplusChaveApi", in: "header" },
+    "X-Ambiente": { secret: "cplusAmbiente", in: "header" },
+  };
+
+  const POR_PAGINA = 10;
+
+  /** StatusDoMovimento da API do C-Plus 5 → rótulo e cor da espinha. */
+  const STATUS = {
+    1: { rotulo: "Não realizada", cor: "var(--ambar)" },
+    2: { rotulo: "Realizada", cor: "var(--verde)" },
+    3: { rotulo: "Cancelada", cor: "var(--vermelho)" },
+    4: { rotulo: "Estornada", cor: "var(--cinza)" },
+    99: { rotulo: "Liberada", cor: "var(--azul)" },
+  };
+
+  const dinheiro = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+  const dataCurta = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  // Estado do painel. `idPessoaNoErp` é o que amarra o contato do atendimento
+  // às vendas: sem ele não há o que listar.
+  const estado = {
+    idContato: null,
+    idPessoaNoErp: null,
+    pagina: 1,
+    totalPaginas: 1,
+    busca: "",
+  };
+
+  const secoes = {};
+  const campos = {};
+  document.querySelectorAll("[data-secao]").forEach((el) => {
+    secoes[el.dataset.secao] = el;
+  });
+  document.querySelectorAll("[data-campo]").forEach((el) => {
+    campos[el.dataset.campo] = el;
+  });
+  const modeloDeVenda = document.querySelector('[data-modelo="venda"]');
+  const botaoAnterior = document.querySelector('[data-acao="anterior"]');
+  const botaoProxima = document.querySelector('[data-acao="proxima"]');
+  const botaoRepetir = document.querySelector('[data-acao="repetir"]');
+
+  // --- Renderização -----------------------------------------------------
+
+  function exibir(nome, visivel) {
+    secoes[nome].hidden = !visivel;
   }
 
-  function mostrarPedido(pedido) {
-    elResultado.querySelector('[data-campo="numero"]').textContent =
-      pedido.numero ?? "—";
-    elResultado.querySelector('[data-campo="status"]').textContent =
-      pedido.status ?? "—";
-    elResultado.querySelector('[data-campo="valor"]').textContent =
-      pedido.valorFormatado ?? "—";
-    elResultado.hidden = false;
-    elEstado.hidden = true;
+  /** Estado de aviso: ocupa o painel inteiro e esconde lista, busca e paginação. */
+  function mostrarAviso(titulo, texto, comRepetir) {
+    campos.avisoTitulo.textContent = titulo;
+    campos.avisoTexto.textContent = texto;
+    botaoRepetir.hidden = !comRepetir;
+    exibir("aviso", true);
+    exibir("lista", false);
+    exibir("esqueleto", false);
+    exibir("resumo", false);
+    exibir("paginacao", false);
   }
 
-  async function aoAbrirAtendimento(atendimento) {
-    const telefone = atendimento && atendimento.contato && atendimento.contato.numero;
-    if (!telefone) {
-      mostrarEstado("Este contato não tem telefone cadastrado.");
-      return;
+  function mostrarCarregando() {
+    exibir("aviso", false);
+    exibir("lista", false);
+    exibir("esqueleto", true);
+  }
+
+  function renderizarVendas(vendas, totalDeVendas) {
+    const lista = secoes.lista;
+    lista.replaceChildren();
+
+    vendas.forEach((venda) => {
+      const linha = modeloDeVenda.content.cloneNode(true);
+      const status = STATUS[venda.Status] || {
+        rotulo: "—",
+        cor: "var(--cinza)",
+      };
+
+      linha.querySelector(".venda").style.setProperty("--cor-status", status.cor);
+      linha.querySelector('[data-campo="numero"]').textContent =
+        venda.NumeroSaida != null ? `#${venda.NumeroSaida}` : "—";
+      linha.querySelector('[data-campo="valor"]').textContent = dinheiro.format(
+        venda.ValorTotal || 0,
+      );
+      linha.querySelector('[data-campo="data"]').textContent = venda.Data
+        ? dataCurta.format(new Date(venda.Data))
+        : "—";
+      linha.querySelector('[data-campo="status"]').textContent = status.rotulo;
+      linha.querySelector('[data-campo="itens"]').textContent =
+        resumirItens(venda.Itens);
+
+      lista.appendChild(linha);
+    });
+
+    estado.totalPaginas = Math.max(1, Math.ceil(totalDeVendas / POR_PAGINA));
+
+    campos.total.innerHTML = `<strong>${totalDeVendas}</strong> ${
+      totalDeVendas === 1 ? "venda" : "vendas"
+    }`;
+    campos.posicao.textContent = `${estado.pagina} / ${estado.totalPaginas}`;
+    botaoAnterior.disabled = estado.pagina <= 1;
+    botaoProxima.disabled = estado.pagina >= estado.totalPaginas;
+
+    exibir("aviso", false);
+    exibir("esqueleto", false);
+    exibir("lista", true);
+    exibir("resumo", true);
+    exibir("paginacao", estado.totalPaginas > 1);
+  }
+
+  /** "3 itens · Cabo HDMI 2m, Fonte 12V" — o suficiente pra reconhecer a venda. */
+  function resumirItens(itens) {
+    if (!Array.isArray(itens) || itens.length === 0) return "Sem itens";
+    const nomes = itens
+      .map((item) => item.NomeProduto)
+      .filter(Boolean)
+      .slice(0, 3)
+      .join(", ");
+    const contagem = `${itens.length} ${itens.length === 1 ? "item" : "itens"}`;
+    return nomes ? `${contagem} · ${nomes}` : contagem;
+  }
+
+  // --- Chamadas de API --------------------------------------------------
+
+  /**
+   * Descobre o código da pessoa do contato ativo e o traduz para o id que o
+   * C-Plus 5 usa nas vendas. São três saltos, e cada um pode faltar num
+   * cadastro incompleto — por isso cada etapa tem seu próprio aviso:
+   *
+   *   contato do atendimento → IdPessoa (Novus) → Codigo (Novus) → Id (C-Plus 5)
+   */
+  async function resolverPessoaNoErp(idContato) {
+    const contato = await enviarComando("apiRequest", {
+      host: HOST_NOVUS,
+      method: "GET",
+      endpoint: `v1/contatodechat/${idContato}`,
+    });
+
+    if (!contato || !contato.IdPessoa) {
+      return { erro: "sem-pessoa" };
     }
 
-    mostrarEstado("Consultando pedido…");
+    const pessoa = await enviarComando("apiRequest", {
+      host: HOST_NOVUS,
+      method: "GET",
+      endpoint: `v1/pessoas/${contato.IdPessoa}`,
+    });
+
+    const codigo = pessoa && pessoa.Codigo;
+    if (!codigo) {
+      return { erro: "sem-codigo" };
+    }
+
+    // `Codigo` é o campo que os dois sistemas compartilham. No C-Plus 5 as
+    // vendas são filtradas por `IdPessoa` (uuid), então o código vira id aqui.
+    const clientes = await enviarComando("apiRequest", {
+      host: HOST_ERP,
+      method: "GET",
+      endpoint: "v1/Clientes",
+      query: { Codigo: codigo, limite: 1 },
+      secretRefs: SEGREDOS_DO_ERP,
+    });
+
+    const cliente = clientes && clientes.Value && clientes.Value[0];
+    if (!cliente) {
+      return { erro: "sem-cliente", codigo };
+    }
+
+    return { id: cliente.Id, codigo, nome: cliente.Nome };
+  }
+
+  /**
+   * A busca do painel é um campo só, mas o C-Plus 5 tem um filtro para cada
+   * coisa. Só dígitos vira busca por número da venda; qualquer outra coisa
+   * vira busca por nome de produto.
+   */
+  function filtroDaBusca(termo) {
+    if (!termo) return { query: {}, dica: "" };
+    if (/^\d+$/.test(termo)) {
+      return {
+        query: { NumeroDaVendaAproximado: termo },
+        dica: "filtrando por <b>número da venda</b>",
+      };
+    }
+    return {
+      query: { NomeDoProdutoAproximado: termo },
+      dica: "filtrando por <b>nome do produto</b>",
+    };
+  }
+
+  async function carregarVendas() {
+    if (!estado.idPessoaNoErp) return;
+
+    const filtro = filtroDaBusca(estado.busca);
+    campos.dicaBusca.innerHTML = filtro.dica;
+    campos.dicaBusca.hidden = !filtro.dica;
+
+    mostrarCarregando();
 
     try {
-      // O plugin nunca vê a chave do ERP: manda só o NOME do segredo em
-      // `secretRefs`, e o host resolve o valor real do lado do servidor
-      // antes de chamar o ERP. Ver README, seção "Segurança".
-      const pedido = await enviarComando("apiRequest", {
-        host: "meuerp",
+      const resposta = await enviarComando("apiRequest", {
+        host: HOST_ERP,
         method: "GET",
-        endpoint: "pedidos/por-telefone",
-        query: { telefone },
-        secretRefs: {
-          "X-Api-Key": { secret: "meuErpApiKey", in: "header" },
-        },
+        endpoint: "v1/Vendas",
+        query: Object.assign(
+          {
+            IdPessoa: estado.idPessoaNoErp,
+            pagina: estado.pagina,
+            limite: POR_PAGINA,
+            ordenacao: "Data DESC",
+          },
+          filtro.query,
+        ),
+        secretRefs: SEGREDOS_DO_ERP,
       });
 
-      if (!pedido) {
-        mostrarEstado("Nenhum pedido encontrado para este contato.");
+      const vendas = (resposta && resposta.Value) || [];
+      const total = (resposta && resposta.Paging && resposta.Paging.TotalCount) || 0;
+
+      if (vendas.length === 0) {
+        mostrarAviso(
+          estado.busca ? "Nada encontrado" : "Nenhuma venda",
+          estado.busca
+            ? "Nenhuma venda deste contato bate com a busca."
+            : "Este contato ainda não tem vendas registradas no C-Plus 5.",
+          false,
+        );
         return;
       }
 
-      mostrarPedido(pedido);
+      renderizarVendas(vendas, total);
     } catch (erro) {
-      mostrarEstado("Não foi possível consultar o pedido agora.");
-      console.error("[consulta-pedido-erp]", erro);
+      mostrarAviso(
+        "Não foi possível consultar",
+        "A API do C-Plus 5 não respondeu. Confira as variáveis do plugin ou tente de novo.",
+        true,
+      );
+      console.error("[vendas-cplus5]", erro);
+    }
+  }
+
+  // --- Eventos de atendimento -------------------------------------------
+
+  async function aoAbrirAtendimento(atendimento) {
+    const contato = (atendimento && atendimento.contato) || {};
+    if (!contato.id) {
+      aoFecharAtendimento();
+      return;
+    }
+
+    // O host reemite o atendimento em foco a cada abrir/focar. Sem esta guarda
+    // o painel recarregaria tudo e perderia a página e a busca do atendente.
+    if (contato.id === estado.idContato) return;
+
+    estado.idContato = contato.id;
+    estado.idPessoaNoErp = null;
+    estado.pagina = 1;
+    estado.busca = "";
+    campos.busca.value = "";
+
+    campos.nomeContato.textContent = contato.nome || "Contato";
+    campos.codigoPessoa.textContent = "…";
+    campos.codigoPessoa.hidden = false;
+    exibir("contato", true);
+    exibir("controles", false);
+    mostrarCarregando();
+
+    try {
+      const pessoa = await resolverPessoaNoErp(contato.id);
+
+      if (pessoa.erro === "sem-pessoa") {
+        campos.codigoPessoa.hidden = true;
+        mostrarAviso(
+          "Contato sem pessoa",
+          "Este contato não está vinculado a uma pessoa no Novus CRM.",
+          false,
+        );
+        return;
+      }
+
+      if (pessoa.erro === "sem-codigo") {
+        campos.codigoPessoa.hidden = true;
+        mostrarAviso(
+          "Pessoa sem código",
+          "A pessoa deste contato não tem código de cadastro — é ele que liga o Novus CRM ao C-Plus 5.",
+          false,
+        );
+        return;
+      }
+
+      if (pessoa.erro === "sem-cliente") {
+        campos.codigoPessoa.hidden = false;
+        campos.codigoPessoa.textContent = pessoa.codigo;
+        mostrarAviso(
+          "Cliente não encontrado",
+          `Nenhum cliente com o código ${pessoa.codigo} existe no C-Plus 5.`,
+          false,
+        );
+        return;
+      }
+
+      estado.idPessoaNoErp = pessoa.id;
+      campos.codigoPessoa.hidden = false;
+      campos.codigoPessoa.textContent = pessoa.codigo;
+      if (pessoa.nome) campos.nomeContato.textContent = pessoa.nome;
+      exibir("controles", true);
+
+      await carregarVendas();
+    } catch (erro) {
+      mostrarAviso(
+        "Não foi possível consultar",
+        "Falha ao localizar o cliente no C-Plus 5. Confira as variáveis do plugin ou tente de novo.",
+        true,
+      );
+      console.error("[vendas-cplus5]", erro);
     }
   }
 
   function aoFecharAtendimento() {
-    mostrarEstado("Abra um atendimento para consultar o pedido do contato.");
+    estado.idContato = null;
+    estado.idPessoaNoErp = null;
+    exibir("contato", false);
+    exibir("controles", false);
+    mostrarAviso(
+      "Nenhum atendimento aberto",
+      "Abra um atendimento para ver as vendas do contato no C-Plus 5.",
+      false,
+    );
   }
 
-  mostrarEstado("Abra um atendimento para consultar o pedido do contato.");
+  // --- Interações do painel ---------------------------------------------
 
-  inicializar("consulta-pedido-erp", {
+  let debounce;
+  campos.busca.addEventListener("input", (evento) => {
+    const termo = evento.target.value.trim();
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      if (termo === estado.busca) return;
+      estado.busca = termo;
+      estado.pagina = 1;
+      carregarVendas();
+    }, 350);
+  });
+
+  botaoAnterior.addEventListener("click", () => {
+    if (estado.pagina <= 1) return;
+    estado.pagina -= 1;
+    carregarVendas();
+  });
+
+  botaoProxima.addEventListener("click", () => {
+    if (estado.pagina >= estado.totalPaginas) return;
+    estado.pagina += 1;
+    carregarVendas();
+  });
+
+  botaoRepetir.addEventListener("click", () => {
+    if (estado.idPessoaNoErp) {
+      carregarVendas();
+      return;
+    }
+    // Ainda nem chegamos a resolver a pessoa: refaz desde o começo.
+    const idContato = estado.idContato;
+    estado.idContato = null;
+    aoAbrirAtendimento({ contato: { id: idContato } });
+  });
+
+  // --- Registro ---------------------------------------------------------
+
+  aoFecharAtendimento();
+
+  inicializar("vendas-cplus5", {
     widgetbar: [
       {
-        id: "consulta-pedido",
-        label: "Pedido do contato",
+        id: "vendas-cplus5",
+        text: "Vendas no C-Plus 5",
       },
     ],
     events: {
+      // O host retém o último atendimento focado e reemite para plugins que
+      // terminam de carregar depois — é assim que o painel já abre preenchido.
       aoAbrirAtendimento: registrarEvento("aoAbrirAtendimento", aoAbrirAtendimento),
       aoFocarAtendimento: registrarEvento("aoFocarAtendimento", aoAbrirAtendimento),
       aoFecharAtendimento: registrarEvento("aoFecharAtendimento", aoFecharAtendimento),
