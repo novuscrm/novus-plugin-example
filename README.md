@@ -93,6 +93,61 @@ Os eventos de abrir e focar são o mesmo handler aqui, e o handler ignora
 reemissões do mesmo contato. Sem essa guarda, cada troca de foco recarregaria a
 lista e o atendente perderia a página e a busca.
 
+### Onde o botão do plugin aparece
+
+Isto não se configura no cadastro. O cadastro em **Opções → Plugins** tem só
+dois campos, `Titulo` e `Conteudo`, e nenhum deles decide posição. Quem decide
+é o `initialize`, no código do plugin: cada chave do registry alimenta uma
+superfície diferente do Novus CRM.
+
+| Chave do `initialize` | Onde aparece |
+|---|---|
+| `widgetbar` | Barra lateral **direita**. Item sem `callback` abre o painel do plugin num drawer de 380px |
+| `navbar` | Barra lateral **esquerda**, na seção "Integrações" |
+| `options` | Menu de **Configurações**, na rota `/opcoes` |
+| `buttons: { "atendimento-chat": [...] }` | Botão visível no header do atendimento |
+| `buttons: { "atendimento-chat-menu": [...] }` | Item no menu ⋮ do atendimento |
+
+Este exemplo registra só `widgetbar`, então o botão dele mora na barra direita.
+
+**Um item aparece sem você registrar nada.** Todo plugin ativo ganha uma
+entrada genérica no menu ⋮ do atendimento, com ícone de peça de
+quebra-cabeça, para que sempre exista uma forma de abrir o plugin. Essa
+entrada some assim que o plugin registra um botão próprio em
+`atendimento-chat` ou `atendimento-chat-menu`. Ela **não** é o item de
+`widgetbar`: as duas coisas coexistem, em lugares diferentes.
+
+Se o ícone da barra direita não aparecer, verifique nesta ordem:
+
+1. A barra lateral direita está visível? Ela some abaixo de 768px de largura e
+   quando está recolhida.
+2. O ícone carregou? O host renderiza `icon_url` como `<img>` com `alt=""`. Se
+   a imagem falhar, o botão continua lá e clicável, mas **invisível**. Por
+   isso este exemplo embute o ícone como data URI, que não depende de uma
+   segunda requisição.
+3. O navegador está com uma versão antiga do `plugin.js` em cache? O registro
+   acontece uma vez, no carregamento do iframe.
+
+### O ícone do botão
+
+Vem de `icon_url` (o host também aceita `icone_url` e `icon`) no item de
+`widgetbar`. Sem essa chave, o Novus CRM desenha a peça de quebra-cabeça
+genérica.
+
+```js
+widgetbar: [
+  { id: "vendas-cplus5", text: "Vendas no C-Plus 5", icon_url: ICONE },
+]
+```
+
+Se preferir servir um arquivo em vez do data URI, a URL precisa ser
+**absoluta**. Quem monta a `<img>` é a página do Novus CRM, então um caminho
+relativo resolveria contra o domínio do CRM, não contra o seu:
+
+```js
+const ICONE = new URL("icone.svg", location.href).href;
+```
+
 ### Comandos disponíveis (visão geral)
 
 | Comando | Direção | Para que serve |
@@ -137,8 +192,9 @@ plugin decide qual usar pelo que foi digitado:
 - só dígitos → `NumeroDaVendaAproximado` (busca por número da venda)
 - qualquer outra coisa → `NomeDoProdutoAproximado` (busca por produto)
 
-O painel mostra qual filtro está ativo abaixo do campo, para o atendente não
-ficar adivinhando por que uma busca não retornou nada.
+A linha logo acima da lista diz quantos resultados existem e por qual filtro
+("3 vendas com produto cabo"), para o atendente não ficar adivinhando por que
+uma busca não retornou nada.
 
 ## Configuração no Novus CRM (passo a passo)
 
@@ -157,10 +213,20 @@ Peça ao **suporte técnico do Novus CRM** para liberar o host do C-Plus 5 com:
 |---|---|
 | Nome do host (usado pelo plugin) | `cplus5` |
 | Endereço | `https://api.cplus.com.br` |
-| Endpoints e métodos | `GET v1/Clientes`, `GET v1/Vendas` |
+| Endpoints e métodos | toda a `v1/`, em GET, POST, PUT, PATCH e DELETE |
 
 O nome `cplus5` é o que aparece em `host:` nas chamadas de `plugin.js`. Se o
 suporte cadastrar com outro nome, ajuste a constante `HOST_ERP` no arquivo.
+
+O escopo amplo é uma escolha, não um descuido: evita voltar ao suporte a cada
+endpoint novo. Vale saber o que ele implica. A allowlist do proxy é global por
+host, e o `pluginId` não é validado, então essa liberação vale para **qualquer
+plugin ativo da conta** — não só este. Se algum plugin da conta for de
+terceiro ou for comprometido, ele alcança escrita e exclusão no ERP com a
+chave da conta. Estreitar a lista no proxy é o único ponto de controle.
+
+Se preferir um escopo menor, peça só o que o plugin usa: `GET v1/Clientes` e
+`GET v1/Vendas` bastam para este exemplo.
 
 > O host `publica` (API pública do próprio Novus CRM), usado nos passos 1 e 2
 > da tabela anterior, já vem liberado — você não precisa pedir nada para ele.
@@ -181,17 +247,32 @@ do plugin.
 ### Passo 3 — Cadastrar as variáveis no Novus CRM
 
 O cofre de segredos dos plugins são as **variáveis globais** da conta (nome e
-valor). Este exemplo usa três:
+valor). Este exemplo usa quatro:
 
 | Nome da variável | Valor | Usada por |
 |---|---|---|
 | `chaveApiPublica` | a chave de API do próprio Novus CRM, em **Opções → Chave de API** | host `publica` (o proxy injeta sozinho) |
-| `cplusChaveApi` | `X-Chave-Api {sua-chave}` — **com o prefixo**, é o valor inteiro do cabeçalho | host `cplus5` |
-| `cplusAmbiente` | o domínio do seu ambiente no C-Plus 5 | host `cplus5` |
+| `cplus.chaveapi` | `X-Chave-Api {sua-chave}` — **com o prefixo**, é o valor inteiro do cabeçalho | host `cplus5` |
+| `cplus.ambiente` | o domínio do seu ambiente no C-Plus 5 | host `cplus5` |
+| `cplus.api` | `https://api.cplus.com.br` — **sem** `/v1` no final | referência de cadastro (ver abaixo) |
 
-O prefixo `X-Chave-Api ` faz parte do valor de `cplusChaveApi` porque o proxy
-injeta a variável como o conteúdo do cabeçalho, sem montar nada em volta. Se
-esquecer o prefixo, a API do C-Plus 5 responde 401.
+Duas observações que evitam as falhas mais comuns:
+
+**O nome `chaveApiPublica` é fixo.** O proxy do Novus CRM resolve esse segredo
+por um nome cravado no código, não por configuração. Renomear essa variável
+quebra todas as chamadas ao host `publica`.
+
+**O prefixo `X-Chave-Api ` faz parte do valor de `cplus.chaveapi`.** O proxy
+injeta a variável como o conteúdo inteiro do cabeçalho, sem montar nada em
+volta. Se esquecer o prefixo, a API do C-Plus 5 responde 401.
+
+**`cplus.api` não é lida pelo plugin.** O endereço do ERP vive no registry de
+hosts do proxy (é o que o suporte cadastra no passo 1), e `secretRefs` só
+injeta valores em query, cabeçalho ou corpo — nunca troca o endereço do host.
+A variável existe como registro de qual endereço o host `cplus5` deve apontar,
+para quem for conferir a configuração depois. Ela vai sem `/v1` porque o proxy
+monta a URL como `{endereço}/{endpoint}` e o plugin já manda `v1/Vendas` e
+`v1/Clientes` no endpoint — com `/v1` nos dois lados viraria `/v1/v1/Vendas`.
 
 Para cadastrar pela API pública do Novus CRM:
 
@@ -200,11 +281,11 @@ curl -X POST https://api.novuscrm.com.br/v1/variaveis-globais \
   -H "X-Authorization: X-Chave-Api SUA_CHAVE_DO_NOVUS" \
   -H "X-Ambiente: SEU_DOMINIO_NO_NOVUS" \
   -H "Content-Type: application/json" \
-  -d '{ "Nome": "cplusChaveApi", "Valor": "X-Chave-Api SUA_CHAVE_DO_CPLUS" }'
+  -d '{ "Nome": "cplus.chaveapi", "Valor": "X-Chave-Api SUA_CHAVE_DO_CPLUS" }'
 ```
 
-Repita para `cplusAmbiente`. Se preferir não mexer na API, peça ao suporte do
-Novus CRM para cadastrar as variáveis por você.
+Repita para `cplus.ambiente` e `cplus.api`. Se preferir não mexer na API, peça
+ao suporte do Novus CRM para cadastrar as variáveis por você.
 
 ### Passo 4 — Hospedar e cadastrar o plugin
 
@@ -214,6 +295,25 @@ Novus CRM para cadastrar as variáveis por você.
    `manifest-exemplo.json` para o formato dos campos.
 3. Abra um atendimento de um contato que tenha pessoa vinculada com código. O
    botão do plugin aparece na barra lateral direita.
+
+## Mensagens de erro e o que fazer
+
+Quem lê o painel é o atendente, que não mexe em configuração. Por isso o plugin
+não mostra o erro técnico: ele traduz cada resposta do proxy para um recado
+específico, e só oferece "Tentar de novo" quando repetir tem chance de
+resolver. A função `explicarErro` em `plugin.js` faz esse mapeamento.
+
+| O atendente vê | Causa técnica | Quem resolve |
+|---|---|---|
+| C-Plus 5 não conectado | `Host not allowed` — host `cplus5` fora do registry | Suporte do Novus CRM (passo 1) |
+| Consulta não autorizada | `Endpoint not allowed` / `Method not allowed` | Suporte do Novus CRM (passo 1) |
+| Configuração incompleta | `Secret not found: {nome}` — variável não cadastrada | Administrador da conta (passo 3) |
+| Acesso recusado pelo C-Plus 5 | ERP respondeu 401/403 — credencial inválida | Administrador (conferir `cplus.chaveapi` e `cplus.ambiente`) |
+| Sessão expirada | `Unauthorized` — sessão do Novus CRM caiu | O próprio atendente, recarregando a página |
+| C-Plus 5 indisponível | timeout, 502, rede | Ninguém — botão "Tentar de novo" aparece |
+
+O erro técnico continua indo para o console do navegador, prefixado com
+`[vendas-cplus5]`, para quem estiver depurando.
 
 ## Segurança: como a chave do C-Plus 5 fica protegida
 
@@ -230,8 +330,8 @@ const resposta = await enviarComando("apiRequest", {
   endpoint: "v1/Vendas",
   query: { IdPessoa: idDoCliente, pagina: 1, limite: 10, ordenacao: "Data DESC" },
   secretRefs: {
-    "X-Authorization": { secret: "cplusChaveApi", in: "header" },
-    "X-Ambiente": { secret: "cplusAmbiente", in: "header" },
+    "X-Authorization": { secret: "cplus.chaveapi", in: "header" },
+    "X-Ambiente": { secret: "cplus.ambiente", in: "header" },
   },
 });
 ```
@@ -245,8 +345,7 @@ a API de destino exigir.
 ## Rodando localmente
 
 Este plugin não precisa de build. Basta servir os arquivos estáticos deste
-repositório com qualquer servidor HTTP simples, e apontar a URL para o Novus
-CRM ao cadastrar o plugin no ambiente de testes:
+repositório com qualquer servidor HTTP simples:
 
 ```bash
 npx serve .
@@ -254,7 +353,53 @@ npx serve .
 python3 -m http.server 8080
 ```
 
-Cadastre o plugin em **Opções → Plugins** usando a URL local.
+Se o seu Novus CRM também roda local, em `http://`, cadastre direto
+`http://localhost:8080/index.html` em **Opções → Plugins** e pronto.
+
+### Testando contra um Novus CRM em HTTPS
+
+Aí `http://localhost` não serve: o navegador bloqueia conteúdo misto e o
+iframe não carrega. Você precisa de um túnel HTTPS público apontando para a
+sua máquina.
+
+Use o **Cloudflare Tunnel**. É gratuito, não pede conta e funciona dentro do
+iframe:
+
+```bash
+brew install cloudflared          # ou baixe de developers.cloudflare.com
+cloudflared tunnel --url http://localhost:8080
+```
+
+Ele imprime uma URL `https://<nome-aleatório>.trycloudflare.com`. Cadastre
+`<essa-url>/index.html` em **Opções → Plugins**.
+
+**Não use ngrok no plano gratuito.** Ele injeta uma página de aviso ("You are
+about to visit...") em toda requisição com User-Agent de navegador. O iframe
+carrega *essa página*, não o seu plugin, e o resultado é um painel em branco
+sem erro aparente. Não há como contornar pelo lado do plugin: o interstitial
+roda no edge do ngrok, antes de qualquer traffic policy.
+
+Três coisas que economizam tempo:
+
+1. **A URL muda a cada execução.** Derrubou o túnel, precisa atualizar o
+   cadastro do plugin.
+2. **Não abra a URL antes do DNS propagar.** Se você consultar o nome novo
+   cedo demais, recebe `NXDOMAIN` e o resolver guarda essa resposta negativa
+   por até 30 minutos — o túnel funciona e a sua máquina insiste que o site
+   não existe. Se cair nisso: `sudo dscacheutil -flushcache; sudo killall -HUP
+   mDNSResponder`, ou espere.
+3. **A URL precisa aceitar iframe.** O Cloudflare Tunnel não adiciona
+   `X-Frame-Options` nem `Content-Security-Policy: frame-ancestors`, então
+   funciona direto. Se você trocar por outra hospedagem, confirme que ela
+   também não manda esses cabeçalhos, senão o Novus CRM não consegue embutir
+   a página.
+
+### Alternativa sem túnel
+
+Se você tem o mono-repo do Novus CRM, dá para servir o plugin pelo próprio
+app: copie os arquivos para `apps/admin/public/plugins/vendas-cplus5/` e
+cadastre o caminho relativo `/plugins/vendas-cplus5/index.html`. Sem túnel,
+sem conteúdo misto, sem URL que muda.
 
 ## Por que vendas, e não orçamentos
 

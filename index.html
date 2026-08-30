@@ -2,72 +2,72 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <title>Vendas do contato — C-Plus 5</title>
+    <title>Vendas do contato</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <!-- Único recurso externo do plugin. Se a fonte não carregar, a pilha de
-         fallback abaixo mantém o painel legível. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
 
     <style>
       /* ==================================================================
-         Design system C-Plus 5
-         Azul #0030FF como espinha estrutural, hairlines no lugar de sombras,
-         numerais tabulares. O painel vive num iframe estreito (~380px) da
-         barra lateral, mas também abre em página inteira — daí o
-         `max-width` no container.
+         Painel de vendas — UI de produto embutida, não página de marketing.
+
+         Três decisões que guiam o resto do arquivo:
+
+         1. O painel roda num drawer de 380px na barra lateral direita do
+            Novus CRM, e esse drawer já exibe o nome do plugin no topo.
+            Repetir a marca aqui seria ruído, então o painel começa direto
+            no contato.
+         2. Tipografia do sistema, uma família só, para o painel parecer parte
+            do host em vez de uma página estrangeira dentro dele. Número usa
+            `font-variant-numeric: tabular-nums`, que dá largura de dígito
+            constante para as colunas alinharem, sem o visual de terminal que
+            uma fonte monoespaçada traria.
+         3. Altura automática. Nada de `100vh` aqui dentro: quem controla a
+            rolagem é o drawer do host, e esticar o painel só produz vazio.
          ================================================================== */
 
       :root {
         color-scheme: light dark;
 
+        /* Azul do C-Plus 5. Único acento da interface, reservado para o que
+           é interativo (foco, ação). Cor de status é escala à parte. */
         --azul: #0030ff;
-        --azul-forte: #0026cc;
         --azul-veu: #eef1ff;
 
-        --tinta: #0b0d14;
-        --tinta-media: #4a5163;
-        --tinta-fraca: #767d90;
+        --tinta: #12141a;
+        --tinta-media: #4b5261;
+        --tinta-fraca: #79808f;
 
         --fundo: #ffffff;
-        --papel: #f7f8fb;
-        --linha: #e5e8f0;
+        --papel: #f6f7f9;
+        --linha: #e4e7ec;
 
-        --verde: #067a4b;
-        --ambar: #a35c00;
-        --vermelho: #c0223b;
-        --cinza: #6b7183;
+        --verde: #0a7a4d;
+        --ambar: #96591a;
+        --vermelho: #bf2438;
+        --cinza: #6c7280;
 
-        --raio: 8px;
-        --raio-mini: 5px;
+        /* Um raio só, em tudo. */
+        --raio: 6px;
 
-        --sans: "IBM Plex Sans", ui-sans-serif, "Segoe UI", system-ui, sans-serif;
-        --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+        --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       }
 
       @media (prefers-color-scheme: dark) {
         :root {
-          --azul: #5878ff;
-          --azul-forte: #7a92ff;
-          --azul-veu: #161c33;
+          --azul: #6b86ff;
+          --azul-veu: #191f36;
 
-          --tinta: #eef0f6;
-          --tinta-media: #a8afc2;
-          --tinta-fraca: #7b8296;
+          --tinta: #eceef4;
+          --tinta-media: #a5acbd;
+          --tinta-fraca: #79808f;
 
-          --fundo: #0b0d14;
-          --papel: #12141d;
-          --linha: #232838;
+          --fundo: #0f1117;
+          --papel: #161922;
+          --linha: #262b38;
 
-          --verde: #46c78e;
-          --ambar: #e0a63c;
-          --vermelho: #ff7a8e;
-          --cinza: #8a90a3;
+          --verde: #3fc38a;
+          --ambar: #d9a03c;
+          --vermelho: #ff7286;
+          --cinza: #868d9c;
         }
       }
 
@@ -88,51 +88,25 @@
       .painel {
         max-width: 560px;
         margin: 0 auto;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
       }
 
-      /* --- Cabeçalho ------------------------------------------------- */
+      /* --- Contato ---------------------------------------------------- */
 
-      .cabecalho {
+      .contato {
         position: sticky;
         top: 0;
         z-index: 2;
-        padding: 14px 16px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 13px 16px;
         background: var(--fundo);
         border-bottom: 1px solid var(--linha);
       }
 
-      .marca {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 500;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--tinta-fraca);
-      }
-
-      .marca__selo {
-        width: 8px;
-        height: 8px;
-        border-radius: 2px;
-        background: var(--azul);
-      }
-
-      .contato {
-        margin-top: 10px;
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-      }
-
       .contato__nome {
-        margin: 0;
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 600;
         letter-spacing: -0.01em;
         overflow: hidden;
@@ -142,31 +116,35 @@
 
       .contato__codigo {
         flex: none;
-        padding: 2px 6px;
-        border-radius: var(--raio-mini);
-        background: var(--azul-veu);
-        color: var(--azul);
-        font-family: var(--mono);
-        font-size: 11px;
-        font-weight: 500;
+        padding: 2px 7px;
+        border-radius: var(--raio);
+        background: var(--papel);
+        color: var(--tinta-media);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
       }
 
-      /* --- Busca ------------------------------------------------------ */
-
-      .controles {
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--linha);
+      /* Enquanto o código não chegou, o chip vira um bloco cinza do mesmo
+         tamanho — em vez de "…", que parece defeito. */
+      .contato__codigo[data-carregando] {
+        width: 44px;
+        color: transparent;
+        background: var(--linha);
       }
+
+      /* --- Busca ------------------------------------------------------- */
 
       .busca {
         position: relative;
         display: flex;
         align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--linha);
       }
 
       .busca__icone {
         position: absolute;
-        left: 10px;
+        left: 27px;
         width: 14px;
         height: 14px;
         color: var(--tinta-fraca);
@@ -175,7 +153,7 @@
 
       .busca__campo {
         width: 100%;
-        padding: 9px 10px 9px 30px;
+        padding: 8px 10px 8px 31px;
         border: 1px solid var(--linha);
         border-radius: var(--raio);
         background: var(--papel);
@@ -183,9 +161,9 @@
         font-family: var(--sans);
         font-size: 13px;
         transition:
-          border-color 0.15s ease,
-          box-shadow 0.15s ease,
-          background 0.15s ease;
+          border-color 0.12s ease,
+          box-shadow 0.12s ease,
+          background 0.12s ease;
       }
 
       .busca__campo::placeholder {
@@ -196,108 +174,45 @@
         outline: none;
         background: var(--fundo);
         border-color: var(--azul);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--azul) 18%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--azul) 16%, transparent);
       }
 
-      .busca__campo::-webkit-search-cancel-button {
-        cursor: pointer;
-      }
+      /* --- Linha de contexto ------------------------------------------- */
 
-      .dica {
-        margin: 7px 0 0;
-        font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--tinta-fraca);
-      }
-
-      .dica b {
-        color: var(--azul);
-        font-weight: 500;
-      }
-
-      /* --- Resumo ----------------------------------------------------- */
-
-      .resumo {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
+      .contexto {
         padding: 9px 16px;
-        background: var(--papel);
         border-bottom: 1px solid var(--linha);
-        font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        font-size: 12px;
         color: var(--tinta-fraca);
       }
 
-      .resumo strong {
+      .contexto strong {
         color: var(--tinta);
         font-weight: 600;
+        font-variant-numeric: tabular-nums;
       }
 
-      /* --- Lista de vendas -------------------------------------------- */
+      /* --- Lista de vendas --------------------------------------------- */
 
       .lista {
         margin: 0;
         padding: 0;
         list-style: none;
-        flex: 1;
       }
 
       .venda {
-        position: relative;
         display: grid;
         grid-template-columns: 1fr auto;
-        gap: 2px 12px;
-        padding: 12px 16px 12px 19px;
+        gap: 1px 12px;
+        padding: 11px 16px;
         border-bottom: 1px solid var(--linha);
-        animation: surgir 0.28s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-      }
-
-      /* Espinha colorida pelo status — a única cor forte de cada linha. */
-      .venda::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 12px;
-        bottom: 12px;
-        width: 3px;
-        border-radius: 0 2px 2px 0;
-        background: var(--cor-status, var(--cinza));
-      }
-
-      .venda:nth-child(1) { animation-delay: 0.00s; }
-      .venda:nth-child(2) { animation-delay: 0.03s; }
-      .venda:nth-child(3) { animation-delay: 0.06s; }
-      .venda:nth-child(4) { animation-delay: 0.09s; }
-      .venda:nth-child(5) { animation-delay: 0.12s; }
-      .venda:nth-child(6) { animation-delay: 0.15s; }
-      .venda:nth-child(7) { animation-delay: 0.18s; }
-      .venda:nth-child(8) { animation-delay: 0.21s; }
-      .venda:nth-child(9) { animation-delay: 0.24s; }
-      .venda:nth-child(10) { animation-delay: 0.27s; }
-
-      @keyframes surgir {
-        from {
-          opacity: 0;
-          transform: translateY(5px);
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .venda {
-          animation: none;
-        }
       }
 
       .venda__numero {
-        font-family: var(--mono);
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
-        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+        color: var(--tinta-media);
       }
 
       .venda__valor {
@@ -305,7 +220,6 @@
         grid-row: 1 / span 2;
         align-self: center;
         text-align: right;
-        font-family: var(--mono);
         font-size: 14px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
@@ -314,38 +228,21 @@
 
       .venda__meta {
         grid-column: 1;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-family: var(--mono);
-        font-size: 11px;
+        font-size: 12px;
         font-variant-numeric: tabular-nums;
         color: var(--tinta-fraca);
       }
 
+      /* Status: só o rótulo, colorido. A cor reforça, o texto informa —
+         quem não distingue a cor continua lendo "Cancelada". */
       .venda__status {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-family: var(--sans);
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 0;
-        text-transform: none;
         color: var(--cor-status, var(--cinza));
-      }
-
-      .venda__status::before {
-        content: "";
-        width: 5px;
-        height: 5px;
-        border-radius: 50%;
-        background: currentColor;
+        font-weight: 500;
       }
 
       .venda__itens {
         grid-column: 1 / -1;
-        margin: 4px 0 0;
+        margin: 3px 0 0;
         font-size: 12px;
         color: var(--tinta-media);
         overflow: hidden;
@@ -353,96 +250,67 @@
         white-space: nowrap;
       }
 
-      /* --- Esqueleto de carregamento ---------------------------------- */
+      /* --- Carregando --------------------------------------------------- */
 
       .esqueleto__linha {
-        padding: 12px 16px 12px 19px;
-        border-bottom: 1px solid var(--linha);
         display: grid;
         gap: 7px;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--linha);
       }
 
       .barra {
-        height: 9px;
+        height: 8px;
         border-radius: 3px;
-        background: linear-gradient(
-          90deg,
-          var(--papel) 0%,
-          var(--linha) 50%,
-          var(--papel) 100%
-        );
-        background-size: 200% 100%;
-        animation: brilho 1.3s ease-in-out infinite;
+        background: var(--linha);
       }
 
-      .barra--curta { width: 34%; }
-      .barra--media { width: 62%; }
+      .barra--curta { width: 32%; }
+      .barra--media { width: 58%; }
 
-      @keyframes brilho {
-        to {
-          background-position: -200% 0;
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
+      @media (prefers-reduced-motion: no-preference) {
         .barra {
-          animation: none;
+          animation: pulsar 1.4s ease-in-out infinite;
         }
+        .esqueleto__linha:nth-child(2) .barra { animation-delay: 0.1s; }
+        .esqueleto__linha:nth-child(3) .barra { animation-delay: 0.2s; }
+        .esqueleto__linha:nth-child(4) .barra { animation-delay: 0.3s; }
       }
 
-      /* --- Avisos (sem contato, vazio, erro) --------------------------- */
+      @keyframes pulsar {
+        50% { opacity: 0.45; }
+      }
+
+      /* --- Avisos ------------------------------------------------------- */
 
       .aviso {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        padding: 48px 28px;
+        padding: 44px 24px 52px;
         text-align: center;
       }
 
-      .aviso__icone {
-        display: grid;
-        place-items: center;
-        width: 38px;
-        height: 38px;
-        margin-bottom: 6px;
-        border-radius: var(--raio);
-        border: 1px solid var(--linha);
-        background: var(--papel);
-        color: var(--azul);
-      }
-
-      .aviso__icone svg {
-        width: 19px;
-        height: 19px;
-      }
-
       .aviso__titulo {
-        margin: 0;
+        margin: 0 0 5px;
         font-size: 13px;
         font-weight: 600;
       }
 
       .aviso__texto {
-        margin: 0;
-        max-width: 30ch;
-        font-size: 12px;
+        margin: 0 auto;
+        max-width: 34ch;
+        font-size: 12.5px;
         color: var(--tinta-fraca);
       }
 
       .aviso__acao {
-        margin-top: 10px;
+        margin-top: 14px;
       }
 
-      /* --- Botões e paginação ------------------------------------------ */
+      /* --- Botões e paginação -------------------------------------------- */
 
       .botao {
-        padding: 7px 13px;
+        padding: 6px 12px;
         border: 1px solid var(--linha);
-        border-radius: var(--raio-mini);
+        border-radius: var(--raio);
         background: var(--fundo);
         color: var(--tinta);
         font-family: var(--sans);
@@ -450,9 +318,9 @@
         font-weight: 500;
         cursor: pointer;
         transition:
-          border-color 0.15s ease,
-          color 0.15s ease,
-          background 0.15s ease;
+          border-color 0.12s ease,
+          color 0.12s ease,
+          background 0.12s ease;
       }
 
       .botao:hover:not(:disabled) {
@@ -471,25 +339,20 @@
       }
 
       .botao:disabled {
-        opacity: 0.4;
+        color: var(--tinta-fraca);
         cursor: default;
       }
 
       .paginacao {
-        position: sticky;
-        bottom: 0;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        padding: 10px 16px;
-        background: var(--fundo);
-        border-top: 1px solid var(--linha);
+        padding: 12px 16px;
       }
 
       .paginacao__posicao {
-        font-family: var(--mono);
-        font-size: 11px;
+        font-size: 12px;
         font-variant-numeric: tabular-nums;
         color: var(--tinta-fraca);
       }
@@ -498,40 +361,33 @@
 
   <body>
     <div class="painel">
-      <header class="cabecalho">
-        <p class="marca"><span class="marca__selo"></span>C-Plus 5 · Vendas</p>
-        <div class="contato" data-secao="contato" hidden>
-          <span class="contato__nome" data-campo="nomeContato"></span>
-          <span class="contato__codigo" data-campo="codigoPessoa"></span>
-        </div>
+      <header class="contato" data-secao="contato" hidden>
+        <span class="contato__nome" data-campo="nomeContato"></span>
+        <span class="contato__codigo" data-campo="codigoPessoa"></span>
       </header>
 
-      <div class="controles" data-secao="controles" hidden>
-        <div class="busca">
-          <svg class="busca__icone" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4" />
-            <path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-          </svg>
-          <input
-            class="busca__campo"
-            data-campo="busca"
-            type="search"
-            autocomplete="off"
-            placeholder="Número da venda ou produto"
-            aria-label="Buscar vendas do contato"
+      <div class="busca" data-secao="busca" hidden>
+        <!-- Ícone: Phosphor Icons (MIT), regular/magnifying-glass. -->
+        <svg class="busca__icone" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
+          <path
+            d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"
           />
-        </div>
-        <p class="dica" data-campo="dicaBusca" hidden></p>
+        </svg>
+        <input
+          class="busca__campo"
+          data-campo="busca"
+          type="search"
+          autocomplete="off"
+          placeholder="Número da venda ou produto"
+          aria-label="Buscar vendas do contato"
+        />
       </div>
 
-      <div class="resumo" data-secao="resumo" hidden>
-        <span data-campo="total"></span>
-        <span>mais recentes primeiro</span>
-      </div>
+      <p class="contexto" data-secao="contexto" hidden data-campo="contexto"></p>
 
       <ul class="lista" data-secao="lista" hidden></ul>
 
-      <div data-secao="esqueleto" hidden>
+      <div data-secao="esqueleto" hidden aria-hidden="true">
         <div class="esqueleto__linha">
           <div class="barra barra--curta"></div>
           <div class="barra barra--media"></div>
@@ -551,25 +407,9 @@
       </div>
 
       <div class="aviso" data-secao="aviso" aria-live="polite" hidden>
-        <div class="aviso__icone">
-          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path
-              d="M5 3h10v14l-2.5-1.5L10 17l-2.5-1.5L5 17V3Z"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M8 7h4M8 10h4"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linecap="round"
-            />
-          </svg>
-        </div>
         <p class="aviso__titulo" data-campo="avisoTitulo"></p>
         <p class="aviso__texto" data-campo="avisoTexto"></p>
-        <button class="botao aviso__acao" data-acao="repetir" hidden>
+        <button class="botao aviso__acao" data-acao="repetir" type="button" hidden>
           Tentar de novo
         </button>
       </div>
@@ -581,13 +421,13 @@
       </nav>
     </div>
 
-    <!-- Modelo de uma linha da lista. Clonado em `renderizarVendas`. -->
     <template data-modelo="venda">
       <li class="venda">
         <span class="venda__numero" data-campo="numero"></span>
         <span class="venda__valor" data-campo="valor"></span>
         <span class="venda__meta">
           <span data-campo="data"></span>
+          <span aria-hidden="true">·</span>
           <span class="venda__status" data-campo="status"></span>
         </span>
         <p class="venda__itens" data-campo="itens"></p>

@@ -1,12 +1,11 @@
 {
-  "_comentario": "Isto não é um arquivo que o Novus CRM lê — é um exemplo do que preencher na tela Opções > Plugins ao cadastrar este plugin.",
+  "_comentario": "Isto não é um arquivo que o Novus CRM lê — é um exemplo do que preencher na tela Opções > Plugins ao cadastrar este plugin. São só dois campos: Titulo e Conteudo.",
   "Titulo": "Vendas do contato no C-Plus 5",
   "Conteudo": {
     "url": "https://SEU-DOMINIO/index.html",
     "modo": "modal",
     "width": 420
   },
-  "TipoDeExibicao": 0,
-  "_comentario_TipoDeExibicao": "0 = Conversa (o plugin é contextual ao atendimento), 1 = BarraLateral.",
-  "_comentario_widgetbar": "O botão na barra lateral direita não vem daqui: ele é declarado pelo próprio plugin, no `widgetbar` do `initialize` (ver plugin.js)."
+  "_comentario_onde_aparece": "O cadastro não decide onde o botão aparece. Quem decide é o `initialize` do plugin: `widgetbar` põe um botão na barra lateral direita (é o caso deste exemplo), `navbar` põe na barra esquerda, `options` põe no menu de Opções. Ver plugin.js.",
+  "_comentario_icone": "O ícone do botão também vem do `initialize`, na chave `icon_url` do item de widgetbar, e precisa ser URL absoluta. Sem ele o host desenha uma peça de quebra-cabeça genérica."
 }

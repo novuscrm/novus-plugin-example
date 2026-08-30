@@ -90,13 +90,47 @@
    * antes da chamada. Nunca chega ao navegador do atendente.
    */
   const SEGREDOS_DO_ERP = {
-    "X-Authorization": { secret: "cplusChaveApi", in: "header" },
-    "X-Ambiente": { secret: "cplusAmbiente", in: "header" },
+    "X-Authorization": { secret: "cplus.chaveapi", in: "header" },
+    "X-Ambiente": { secret: "cplus.ambiente", in: "header" },
   };
 
   const POR_PAGINA = 10;
 
-  /** StatusDoMovimento da API do C-Plus 5 → rótulo e cor da espinha. */
+  /**
+   * Ícone do botão na barra lateral direita.
+   *
+   * Vai embutido como data URI, não como arquivo. O Novus CRM monta uma
+   * `<img>` com este valor dentro do DOM dele, e uma imagem que não carrega
+   * deixa o botão invisível (a `<img>` do host é `alt=""` e `aria-hidden`) —
+   * o item continua clicável, mas o atendente não vê nada. Data URI não tem
+   * segunda requisição para falhar.
+   *
+   * Se preferir servir um arquivo, use URL absoluta:
+   *
+   *     const ICONE = new URL("icone.svg", location.href).href;
+   *
+   * Caminho relativo não funciona: quem resolve a URL é a página do Novus
+   * CRM, então "icone.svg" apontaria para o domínio do CRM, não para o seu.
+   *
+   * Sem esta chave o host desenha uma peça de quebra-cabeça genérica.
+   *
+   * Glifo: Phosphor Icons (MIT), regular/receipt. O bloco azul existe porque
+   * uma imagem não herda a cor do texto da barra: com fundo próprio, o ícone
+   * tem contraste igual no tema claro e no escuro.
+   */
+  const ICONE =
+    "data:image/svg+xml," +
+    encodeURIComponent(
+      [
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">',
+        '<rect width="256" height="256" rx="56" fill="#0030FF"/>',
+        '<g transform="translate(48 48) scale(0.625)" fill="#FFFFFF">',
+        '<path d="M72,104a8,8,0,0,1,8-8h96a8,8,0,0,1,0,16H80A8,8,0,0,1,72,104Zm8,40h96a8,8,0,0,0,0-16H80a8,8,0,0,0,0,16ZM232,56V208a8,8,0,0,1-11.58,7.15L192,200.94l-28.42,14.21a8,8,0,0,1-7.16,0L128,200.94,99.58,215.15a8,8,0,0,1-7.16,0L64,200.94,35.58,215.15A8,8,0,0,1,24,208V56A16,16,0,0,1,40,40H216A16,16,0,0,1,232,56Zm-16,0H40V195.06l20.42-10.22a8,8,0,0,1,7.16,0L96,199.06l28.42-14.22a8,8,0,0,1,7.16,0L160,199.06l28.42-14.22a8,8,0,0,1,7.16,0L216,195.06Z"/>',
+        "</g></svg>",
+      ].join(""),
+    );
+
+  /** StatusDoMovimento da API do C-Plus 5 → rótulo e cor do rótulo. */
   const STATUS = {
     1: { rotulo: "Não realizada", cor: "var(--ambar)" },
     2: { rotulo: "Realizada", cor: "var(--verde)" },
@@ -140,26 +174,67 @@
 
   // --- Renderização -----------------------------------------------------
 
+  /** Visibilidade das partes ligadas à identificação do cliente. */
   function exibir(nome, visivel) {
     secoes[nome].hidden = !visivel;
   }
 
-  /** Estado de aviso: ocupa o painel inteiro e esconde lista, busca e paginação. */
+  /**
+   * Máquina de estado do corpo do painel: "carregando", "lista" ou "aviso".
+   *
+   * Uma função só decide o que aparece. Antes cada estado precisava lembrar
+   * de esconder os outros, e bastava esquecer um deles para o painel mostrar
+   * duas coisas ao mesmo tempo — uma barra de contagem órfã em cima de uma
+   * mensagem de erro, por exemplo.
+   */
+  function mostrarVista(vista) {
+    secoes.esqueleto.hidden = vista !== "carregando";
+    secoes.aviso.hidden = vista !== "aviso";
+    secoes.lista.hidden = vista !== "lista";
+    secoes.contexto.hidden = vista !== "lista";
+    secoes.paginacao.hidden = vista !== "lista" || estado.totalPaginas <= 1;
+  }
+
+  /**
+   * O chip do código vira um bloco cinza enquanto a busca acontece. Um "…"
+   * ali parece defeito; um bloco do tamanho certo lê como "está vindo".
+   */
+  function marcarCodigoCarregando() {
+    campos.codigoPessoa.hidden = false;
+    campos.codigoPessoa.textContent = "";
+    campos.codigoPessoa.dataset.carregando = "";
+  }
+
+  function mostrarCodigo(codigo) {
+    campos.codigoPessoa.hidden = false;
+    delete campos.codigoPessoa.dataset.carregando;
+    campos.codigoPessoa.textContent = codigo;
+  }
+
   function mostrarAviso(titulo, texto, comRepetir) {
     campos.avisoTitulo.textContent = titulo;
     campos.avisoTexto.textContent = texto;
     botaoRepetir.hidden = !comRepetir;
-    exibir("aviso", true);
-    exibir("lista", false);
-    exibir("esqueleto", false);
-    exibir("resumo", false);
-    exibir("paginacao", false);
+    mostrarVista("aviso");
   }
 
-  function mostrarCarregando() {
-    exibir("aviso", false);
-    exibir("lista", false);
-    exibir("esqueleto", true);
+  /**
+   * "12 vendas, mais recentes primeiro" ou "3 vendas com produto cabo".
+   *
+   * Uma linha carrega a contagem e o filtro ativo. O atendente precisa dos
+   * dois: quantos resultados existem e por que a lista encolheu.
+   */
+  function descreverContexto(total) {
+    const filtro = filtroDaBusca(estado.busca);
+    // "1 venda, mais recentes primeiro" não faz sentido: a nota de ordenação
+    // só entra quando há mais de uma linha para ordenar.
+    const sufixo = estado.busca || total > 1 ? filtro.descricao : "";
+    campos.contexto.replaceChildren(
+      Object.assign(document.createElement("strong"), {
+        textContent: String(total),
+      }),
+      document.createTextNode(` ${total === 1 ? "venda" : "vendas"}${sufixo}`),
+    );
   }
 
   function renderizarVendas(vendas, totalDeVendas) {
@@ -169,20 +244,21 @@
     vendas.forEach((venda) => {
       const linha = modeloDeVenda.content.cloneNode(true);
       const status = STATUS[venda.Status] || {
-        rotulo: "—",
+        rotulo: "Sem status",
         cor: "var(--cinza)",
       };
+      const rotuloStatus = linha.querySelector('[data-campo="status"]');
 
-      linha.querySelector(".venda").style.setProperty("--cor-status", status.cor);
+      rotuloStatus.style.setProperty("--cor-status", status.cor);
+      rotuloStatus.textContent = status.rotulo;
       linha.querySelector('[data-campo="numero"]').textContent =
-        venda.NumeroSaida != null ? `#${venda.NumeroSaida}` : "—";
+        venda.NumeroSaida != null ? `#${venda.NumeroSaida}` : "sem número";
       linha.querySelector('[data-campo="valor"]').textContent = dinheiro.format(
         venda.ValorTotal || 0,
       );
       linha.querySelector('[data-campo="data"]').textContent = venda.Data
         ? dataCurta.format(new Date(venda.Data))
-        : "—";
-      linha.querySelector('[data-campo="status"]').textContent = status.rotulo;
+        : "sem data";
       linha.querySelector('[data-campo="itens"]').textContent =
         resumirItens(venda.Itens);
 
@@ -191,18 +267,12 @@
 
     estado.totalPaginas = Math.max(1, Math.ceil(totalDeVendas / POR_PAGINA));
 
-    campos.total.innerHTML = `<strong>${totalDeVendas}</strong> ${
-      totalDeVendas === 1 ? "venda" : "vendas"
-    }`;
-    campos.posicao.textContent = `${estado.pagina} / ${estado.totalPaginas}`;
+    descreverContexto(totalDeVendas);
+    campos.posicao.textContent = `Página ${estado.pagina} de ${estado.totalPaginas}`;
     botaoAnterior.disabled = estado.pagina <= 1;
     botaoProxima.disabled = estado.pagina >= estado.totalPaginas;
 
-    exibir("aviso", false);
-    exibir("esqueleto", false);
-    exibir("lista", true);
-    exibir("resumo", true);
-    exibir("paginacao", estado.totalPaginas > 1);
+    mostrarVista("lista");
   }
 
   /** "3 itens · Cabo HDMI 2m, Fonte 12V" — o suficiente pra reconhecer a venda. */
@@ -272,16 +342,86 @@
    * vira busca por nome de produto.
    */
   function filtroDaBusca(termo) {
-    if (!termo) return { query: {}, dica: "" };
+    if (!termo) {
+      return { query: {}, descricao: ", mais recentes primeiro" };
+    }
     if (/^\d+$/.test(termo)) {
       return {
         query: { NumeroDaVendaAproximado: termo },
-        dica: "filtrando por <b>número da venda</b>",
+        descricao: ` com número ${termo}`,
       };
     }
     return {
       query: { NomeDoProdutoAproximado: termo },
-      dica: "filtrando por <b>nome do produto</b>",
+      descricao: ` com produto ${termo}`,
+    };
+  }
+
+  /**
+   * Traduz o erro técnico do proxy para um recado que o atendente entenda.
+   *
+   * As mensagens do proxy são poucas e previsíveis, e cada uma aponta para um
+   * passo específico da configuração (ver README). Mapear uma a uma custa
+   * pouco e evita o clássico "algo deu errado", que não ajuda ninguém: quem
+   * lê o painel é o atendente, que não mexe em configuração e precisa saber
+   * se deve chamar o administrador ou só tentar de novo.
+   *
+   * `repetir` liga o botão "Tentar de novo" — só faz sentido em falha
+   * passageira. Erro de configuração não melhora repetindo.
+   */
+  function explicarErro(erro) {
+    const mensagem = (erro && erro.message) || "";
+
+    if (mensagem === "Host not allowed") {
+      return {
+        titulo: "C-Plus 5 não conectado",
+        texto:
+          "A integração com o C-Plus 5 ainda não foi habilitada nesta conta. Peça ao suporte do Novus CRM para liberá-la.",
+        repetir: false,
+      };
+    }
+
+    if (mensagem === "Endpoint not allowed" || mensagem === "Method not allowed") {
+      return {
+        titulo: "Consulta não autorizada",
+        texto:
+          "A integração existe, mas esta consulta ainda não foi liberada. O suporte do Novus CRM resolve isso.",
+        repetir: false,
+      };
+    }
+
+    const segredoFaltando = mensagem.match(/^Secret not found: (.+)$/);
+    if (segredoFaltando) {
+      return {
+        titulo: "Configuração incompleta",
+        texto: `Falta cadastrar a variável "${segredoFaltando[1]}" nas configurações da conta.`,
+        repetir: false,
+      };
+    }
+
+    if (mensagem === "Unauthorized") {
+      return {
+        titulo: "Sessão expirada",
+        texto: "Atualize a página do Novus CRM para entrar novamente.",
+        repetir: false,
+      };
+    }
+
+    // Quando o ERP responde com erro, o proxy repassa o status dele.
+    if (/^proxy 40[13]$/.test(mensagem)) {
+      return {
+        titulo: "Acesso recusado pelo C-Plus 5",
+        texto:
+          "O C-Plus 5 não aceitou as credenciais cadastradas. Peça ao administrador para conferir a chave de API e o ambiente.",
+        repetir: false,
+      };
+    }
+
+    return {
+      titulo: "C-Plus 5 indisponível",
+      texto:
+        "Não conseguimos falar com o C-Plus 5 agora. Tente de novo em alguns instantes.",
+      repetir: true,
     };
   }
 
@@ -289,10 +429,8 @@
     if (!estado.idPessoaNoErp) return;
 
     const filtro = filtroDaBusca(estado.busca);
-    campos.dicaBusca.innerHTML = filtro.dica;
-    campos.dicaBusca.hidden = !filtro.dica;
 
-    mostrarCarregando();
+    mostrarVista("carregando");
 
     try {
       const resposta = await enviarComando("apiRequest", {
@@ -327,11 +465,8 @@
 
       renderizarVendas(vendas, total);
     } catch (erro) {
-      mostrarAviso(
-        "Não foi possível consultar",
-        "A API do C-Plus 5 não respondeu. Confira as variáveis do plugin ou tente de novo.",
-        true,
-      );
+      const aviso = explicarErro(erro);
+      mostrarAviso(aviso.titulo, aviso.texto, aviso.repetir);
       console.error("[vendas-cplus5]", erro);
     }
   }
@@ -356,11 +491,10 @@
     campos.busca.value = "";
 
     campos.nomeContato.textContent = contato.nome || "Contato";
-    campos.codigoPessoa.textContent = "…";
-    campos.codigoPessoa.hidden = false;
+    marcarCodigoCarregando();
     exibir("contato", true);
-    exibir("controles", false);
-    mostrarCarregando();
+    exibir("busca", false);
+    mostrarVista("carregando");
 
     try {
       const pessoa = await resolverPessoaNoErp(contato.id);
@@ -368,7 +502,7 @@
       if (pessoa.erro === "sem-pessoa") {
         campos.codigoPessoa.hidden = true;
         mostrarAviso(
-          "Contato sem pessoa",
+          "Contato sem cadastro",
           "Este contato não está vinculado a uma pessoa no Novus CRM.",
           false,
         );
@@ -386,8 +520,7 @@
       }
 
       if (pessoa.erro === "sem-cliente") {
-        campos.codigoPessoa.hidden = false;
-        campos.codigoPessoa.textContent = pessoa.codigo;
+        mostrarCodigo(pessoa.codigo);
         mostrarAviso(
           "Cliente não encontrado",
           `Nenhum cliente com o código ${pessoa.codigo} existe no C-Plus 5.`,
@@ -397,18 +530,14 @@
       }
 
       estado.idPessoaNoErp = pessoa.id;
-      campos.codigoPessoa.hidden = false;
-      campos.codigoPessoa.textContent = pessoa.codigo;
+      mostrarCodigo(pessoa.codigo);
       if (pessoa.nome) campos.nomeContato.textContent = pessoa.nome;
-      exibir("controles", true);
+      exibir("busca", true);
 
       await carregarVendas();
     } catch (erro) {
-      mostrarAviso(
-        "Não foi possível consultar",
-        "Falha ao localizar o cliente no C-Plus 5. Confira as variáveis do plugin ou tente de novo.",
-        true,
-      );
+      const aviso = explicarErro(erro);
+      mostrarAviso(aviso.titulo, aviso.texto, aviso.repetir);
       console.error("[vendas-cplus5]", erro);
     }
   }
@@ -417,7 +546,7 @@
     estado.idContato = null;
     estado.idPessoaNoErp = null;
     exibir("contato", false);
-    exibir("controles", false);
+    exibir("busca", false);
     mostrarAviso(
       "Nenhum atendimento aberto",
       "Abra um atendimento para ver as vendas do contato no C-Plus 5.",
@@ -467,10 +596,14 @@
   aoFecharAtendimento();
 
   inicializar("vendas-cplus5", {
+    // Item sem `callback`: o clique faz o host abrir o painel do próprio
+    // plugin num drawer de 380px na barra lateral direita. Com `callback`,
+    // o clique voltaria pra cá e o drawer não abriria sozinho.
     widgetbar: [
       {
         id: "vendas-cplus5",
         text: "Vendas no C-Plus 5",
+        icon_url: ICONE,
       },
     ],
     events: {
