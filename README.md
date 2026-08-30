@@ -1,10 +1,24 @@
-# Vendas do contato no C-Plus 5
+<p align="center">
+  <img src=".github/banner.png" alt="Plugin de exemplo para o Novus CRM" width="100%">
+</p>
 
-Plugin de exemplo para o [Novus CRM](https://novuscrm.com.br), integrando com o
-ERP [C-Plus 5](https://www.cplus.com.br).
+<h1 align="center">Plugin de exemplo para o Novus CRM</h1>
 
-Documentação completa do protocolo, com todas as superfícies disponíveis e mais
-casos de uso: [help.novuscrm.com.br/pages/api/plugins.mdx](https://help.novuscrm.com.br/pages/api/plugins.mdx).
+<p align="center">
+  Um painel que lista as vendas do contato no ERP <a href="https://www.cplus.com.br">C-Plus 5</a>,
+  direto na tela de atendimento.<br>
+  Sem build, sem dependências, só o protocolo público de plugins.
+</p>
+
+<p align="center">
+  <a href="https://help.novuscrm.com.br/pages/api/plugins.mdx"><strong>Documentação do protocolo</strong></a>
+  ·
+  <a href="#configuração-no-novus-crm-passo-a-passo">Configuração</a>
+  ·
+  <a href="#rodando-localmente">Rodar localmente</a>
+  ·
+  <a href="LICENSE">MIT</a>
+</p>
 
 ## Sobre este repositório
 
@@ -57,7 +71,8 @@ novus-plugin-example/
 ├── LICENSE                 # MIT
 ├── index.html              # painel exibido na barra lateral
 ├── plugin.js               # protocolo + lógica do plugin
-└── manifest-exemplo.json   # o que preencher ao cadastrar o plugin
+├── manifest-exemplo.json   # o que preencher ao cadastrar o plugin
+└── .github/banner.png      # imagem do topo deste README
 ```
 
 ## Como funciona (protocolo)
