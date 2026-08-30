@@ -143,11 +143,17 @@
     style: "currency",
     currency: "BRL",
   });
-  const dataCurta = new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  /**
+   * A API manda a data da venda como data de calendário, não instante.
+   * `new Date(iso)` converteria para o fuso local e meia-noite UTC viraria o
+   * dia anterior no Brasil — 2026-07-14T00:00:00Z apareceria como 13/07.
+   * Lendo só o trecho YYYY-MM-DD, o dia exibido é o que a API mandou.
+   */
+  function formatarData(iso) {
+    if (typeof iso !== "string" || iso.length < 10) return "";
+    const [ano, mes, dia] = iso.slice(0, 10).split("-");
+    return `${dia}/${mes}/${ano}`;
+  }
 
   // Estado do painel. `idPessoaNoErp` é o que amarra o contato do atendimento
   // às vendas: sem ele não há o que listar.
@@ -256,9 +262,8 @@
       linha.querySelector('[data-campo="valor"]').textContent = dinheiro.format(
         venda.ValorTotal || 0,
       );
-      linha.querySelector('[data-campo="data"]').textContent = venda.Data
-        ? dataCurta.format(new Date(venda.Data))
-        : "sem data";
+      linha.querySelector('[data-campo="data"]').textContent =
+        formatarData(venda.Data) || "sem data";
       linha.querySelector('[data-campo="itens"]').textContent =
         resumirItens(venda.Itens);
 
